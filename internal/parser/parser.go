@@ -254,6 +254,21 @@ type BaseParserConfig struct {
 	} `json:"fact"`
 }
 
+type ShellvarParserConfig struct {
+	BaseParserConfig
+	Var string `json:"var"` // Name of the shell variable to extract
+}
+
+func (c *ShellvarParserConfig) ValidateFields() error {
+	if err := c.BaseParserConfig.ValidateFields(); err != nil {
+		return err
+	}
+	if c.Var == "" {
+		return fmt.Errorf("missing/empty 'var' field for shellvar parser")
+	}
+	return nil
+}
+
 // This just checks if the config structure has the right fields, it doesn't
 // check if their content is correct.
 func (c *BaseParserConfig) ValidateFields() error {
@@ -374,6 +389,21 @@ func FromConfig(rawConfig json.RawMessage, name string) (*Parser, error) {
 		extractor, err = NewJSONPathExtractor(config.JSONPath, target.ValueType)
 		if err != nil {
 			return nil, fmt.Errorf("setting up JSONPath extractor: %v", err)
+		}
+	case "shellvar":
+		decoder := json.NewDecoder(strings.NewReader(string(rawConfig)))
+		decoder.DisallowUnknownFields()
+		var config ShellvarParserConfig
+		if err := decoder.Decode(&config); err != nil {
+			return nil, fmt.Errorf("decoding shellvar parser config: %v", err)
+		}
+		if err := config.ValidateFields(); err != nil {
+			return nil, fmt.Errorf("invalid %q parser config: %v", baseConfig.Type, err)
+		}
+		var err error
+		extractor, err = NewShellvarExtractor(config.Var, target.ValueType)
+		if err != nil {
+			return nil, fmt.Errorf("setting up Shellvar extractor: %v", err)
 		}
 	default:
 		return nil, fmt.Errorf("unknown parser type %q", baseConfig.Type)
